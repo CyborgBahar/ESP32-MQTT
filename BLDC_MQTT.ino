@@ -5,13 +5,6 @@
 #include "HardwareSerial.h"
 #include "DFRobotDFPlayerMini.h"
 
-// Network credentials Here
-const char* ssid = "BWireless";
-const char* password = "whatever1234";
-
-//const char* ssid = "Bahar";
-//const char* password = "chatgpt.";
-
 
 // Network credentials Here
 //onst char* ssid = "sensors";
@@ -23,11 +16,6 @@ const char* mqtt_username = "emqx";
 const char* mqtt_password = "public";
 const int mqtt_port = 1883;
 
-const char* mqttMotorControl = "motorControl";              // MQTT topic for motor control
-const char* mqttTopicSliderMotor = "testTopicSliderMotor";  // MQTT topic for receiving slider values
-const char* mqttStripBlue = "strip_blue";
-const char* mqttStripMagenta = "strip_magenta";
-const char* mqttStripGreen = "strip_green";
 const char* mqttStripFade = "strip_fade";
 const char* mqttStripFade2 = "strip_fade2";
 const char* mqtt_topic_color = "color_picker";
@@ -39,15 +27,9 @@ const char* mqtt_topic_music_loop = "music_loop";
 const char* mqtt_topic_music_random = "music_random";
 const char* mqtt_topic_song_title = "song_title"; // Topic for song title
 
-
-const int MOTOR_PIN = 25;  // GPIO pin for motor control
-const int DIR_PIN = 33;    // GPIO pin for motor direction control
-
 const int DATA_PIN1 = 12;
-const int DATA_PIN2 = 18;
-const int NUM_LEDS = 250;  // Number of LEDs in the strip
+const int NUM_LEDS = 50;  // Number of LEDs in the strip
 CRGB leds1[NUM_LEDS];
-CRGB leds2[NUM_LEDS];
 
 WiFiClient espClient;
 PubSubClient client(espClient);
@@ -107,7 +89,6 @@ void setup() {
 
   // Initialize FastLED strips
   FastLED.addLeds<NEOPIXEL, DATA_PIN1>(leds1, NUM_LEDS);
-  FastLED.addLeds<NEOPIXEL, DATA_PIN2>(leds2, NUM_LEDS);
   FastLED.setMaxPowerInVoltsAndMilliamps(5, 500);
   FastLED.clear();
   FastLED.setBrightness(255);
@@ -117,23 +98,16 @@ void setup() {
   digitalWrite(DIR_PIN, LOW);
 
   // Publish and subscribe
-  client.subscribe(mqttMotorControl);
-  client.subscribe(mqttTopicSliderMotor);
-  client.subscribe(mqttStripBlue);
-  client.subscribe(mqttStripMagenta);
-  client.subscribe(mqttStripGreen);
   client.subscribe(mqttStripFade);
   client.subscribe(mqttStripFade2);
-  
   client.subscribe(mqtt_topic_color_off);
   client.subscribe(mqtt_topic_color);
   client.subscribe(mqtt_topic_music);
   client.subscribe(mqtt_topic_music_next);
   client.subscribe(mqtt_topic_music_previous);
-  
   client.subscribe(mqtt_topic_music_random);
   client.subscribe(mqtt_topic_music_loop);
-   client.subscribe(mqtt_topic_song_title);
+  client.subscribe(mqtt_topic_song_title);
 
   // Initialize UART2 on pins RX2 and TX2
   mySerial.begin(9600, SERIAL_8N1, RX2_PIN, TX2_PIN);
@@ -171,19 +145,6 @@ void callback(char* topic, byte* payload, unsigned int length) {
     payloadStr += (char)payload[i];
   Serial.println(payloadStr);
 
-  // Handle motor control
-  if (strcmp(topic, mqttMotorControl) == 0) {
-    Serial.println("Received motor control message");
-    if (payload[0] == '1') {
-      motorState = true;
-      previousMillis = millis();  // Reset the timer to start the cycle
-      Serial.println("Turning Motor on in fixed direction (counterclockwise)");
-    } else if (payload[0] == '0') {
-      motorState = false;
-      digitalWrite(MOTOR_PIN, LOW);  // Ensure the motor is turned off immediately
-      Serial.println("Turning Motor off");
-    }
-  }
 
   // Handle LED color topics
   if (strcmp(topic, mqtt_topic_color) == 0) {
@@ -211,31 +172,6 @@ void callback(char* topic, byte* payload, unsigned int length) {
     turnOff();  // Function to turn off the LEDs
   }
 
-  else if (strcmp(topic, mqttStripBlue) == 0) {
-    if (payload[0] == '1') {
-      Blue();  // Set LEDs to blue
-    } else if (payload[0] == '0') {
-      turnOff();  // Turn off LEDs
-    }
-  }
-
-  else if (strcmp(topic, mqttStripMagenta) == 0) {
-    if (payload[0] == '1') {
-      Magenta();  // Set LEDs to magenta
-    } else if (payload[0] == '0') {
-      turnOff();  // Turn off LEDs
-    }
-  }
-
-  else if (strcmp(topic, mqttStripGreen) == 0) {
-    if (payload[0] == '1') {
-      ledPatternRunning = true;
-      patternStartMillis = millis();  // Start the LED pattern
-    } else if (payload[0] == '0') {
-      turnOff();                  // Turn off LEDs
-      ledPatternRunning = false;  // Reset the flag
-    }
-  }
 
   else if (strcmp(topic, mqttStripFade) == 0) {
     if (payload[0] == '1') {
@@ -324,50 +260,6 @@ void loop() {
   if (ledPattern2Running) {
     fade2();  // Update LED pattern
   }
-
-  // Manage motor running and pausing
-  unsigned long currentMillis = millis();
-  if (motorState) {
-    if (motorRunning) {
-      if ((currentMillis - previousMillis) >= runInterval) {
-        // Pause the motor
-        digitalWrite(MOTOR_PIN, LOW);
-        Serial.println("Pausing Motor");
-        previousMillis = currentMillis;  // Reset the timer
-        motorRunning = false;
-      }
-    } else {
-      if ((currentMillis - previousMillis) >= pauseInterval) {
-        // Run the motor
-        digitalWrite(MOTOR_PIN, HIGH);  // Set the motor speed to maximum
-        Serial.println("Running Motor");
-        previousMillis = currentMillis;  // Reset the timer
-        motorRunning = true;
-      }
-    }
-  }
-}
-
-void Blue() {
-  for (int i = 0; i < NUM_LEDS; i++) {
-    leds1[i] = CRGB::Blue;
-  }
-  FastLED.show();
-}
-
-void Magenta() {
-  for (int i = 0; i < NUM_LEDS; i++) {
-    leds1[i] = CRGB::Magenta;
-  }
-  FastLED.show();
-}
-
-void Green() {
-  for (int i = 0; i < NUM_LEDS; i++) {
-    leds1[i] = CRGB::Green;
-  }
-  FastLED.show();
-}
 
 void White() {
   for (int i = 0; i < NUM_LEDS; i++) {
